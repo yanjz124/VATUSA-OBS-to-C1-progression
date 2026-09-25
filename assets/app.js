@@ -15,7 +15,7 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 const fmtDate = s => {
   if (!s) return '';
   const [y, m, d] = s.split('-');
-  return `${MON[+m - 1]} ${+d}, ${y}`;
+  return `${+d} ${MON[+m - 1]} ${y}`; // day-first so the day never reads as a 2-digit year
 };
 const fmtShort = s => {
   if (!s) return '';
@@ -221,55 +221,13 @@ function render() {
   $('omitCount').textContent = omitted.length;
   $('omitList').innerHTML = omitted.map(p => card(p, 0)).join('');
 
-  renderSearch();
   renderStages();
 }
 
 function chainOf(r) {
   return [['S1', r.s1], ['S2', r.s2], ['S3', r.s3], ['C1', r.c1]].filter(x => x[1])
-    .map(([k, d]) => `${k} ${esc(fmtDate(d.slice(0, 10)))}`).join(' &rarr; ');
-}
-
-// Row for a home controller who isn't C1+ (so isn't part of the OBS->C1 dataset).
-function recCard(r) {
-  const status = r.ratingId <= 1 ? 'Still OBS, no stages started yet'
-    : r.ratingId < 5 ? `Currently ${esc(r.rating)}, hasn't reached C1 yet`
-    : 'No promotion history on file';
-  return `<div class="Box-row">
-    <div><strong>${esc(r.name)}</strong> <span class="Label ml-1" title="${esc(r.facName)}">${esc(r.facility)}</span>
-      <span class="Label Label--accent ml-1">${esc(r.rating)}</span></div>
-    <div class="f6 color-fg-muted text-mono mt-1">CID ${r.cid} &middot; ${chainOf(r) || 'no promotions on record'}</div>
-    <div class="f6 color-fg-muted mt-1">${status}.</div>
-  </div>`;
-}
-
-function renderSearch() {
-  if (!state) return;
-  const q = $('search').value.trim().toLowerCase();
-  const out = $('searchResults');
-  if (q.length < 2) { out.innerHTML = ''; return; }
-  const counted = state.summary.counted;
-  const rowByCid = new Map(state.rows.map(r => [r.cid, r]));
-  const all = state.recs.filter(r => String(r.cid).includes(q) || r.name.toLowerCase().includes(q));
-  all.sort((a, b) => (rowByCid.has(b.cid) - rowByCid.has(a.cid)) || (b.ratingId - a.ratingId));
-  const hits = all.slice(0, 10);
-  if (!hits.length) {
-    const isCid = /^[0-9]+$/.test(q);
-    out.innerHTML = `<div class="blankslate blankslate-narrow Box"><p class="mb-0">No controller on any VATUSA home roster matches “${esc(q)}”.
-      ${isCid ? 'Enter the full CID under <a href="#compare">Compare a controller</a>, which also checks VATUSA for members who aren\'t on a home roster.' : ''}</p></div>`;
-    return;
-  }
-  out.innerHTML = `<div class="Box">${hits.map(r => {
-    const p = rowByCid.get(r.cid);
-    let html = p ? card(p, 0) : recCard(r);
-    if (p && p.counted) {
-      const rank = counted.findIndex(c => c.cid === p.cid) + 1;
-      const pct = Math.round((1 - rank / counted.length) * 100);
-      html += `<div class="Box-row py-2 color-bg-subtle f6">Rank <strong>${rank}</strong> of ${counted.length} &middot;
-        faster than <strong>${pct}%</strong> of the division</div>`;
-    }
-    return html + `<div class="Box-row py-2 f6"><button type="button" class="btn-link" data-compare="${r.cid}">Compare stage by stage &darr;</button></div>`;
-  }).join('')}${all.length > hits.length ? `<div class="Box-footer f6 color-fg-muted">Showing 10 of ${all.length} matches. Refine the search to narrow it down.</div>` : ''}</div>`;
+    .map(([k, d]) => `<span class="text-nowrap"><span class="Label Label--secondary mr-1">${k}</span>${esc(fmtDate(d.slice(0, 10)))}</span>`)
+    .join('<span class="color-fg-muted mx-2">&rarr;</span>');
 }
 
 /* ---------- stages ---------- */
@@ -433,13 +391,26 @@ function renderCompare(r, note = '', noHistory = false) {
       </span></span>
     </div>`);
   }
+  // C1+ home controllers also get their full rating ladder and OBS->C1 rank.
+  const row = state.rows.find(x => x.cid === r.cid);
+  const counted = state.summary.counted;
+  let rank = '';
+  if (row && row.counted) {
+    const i = counted.findIndex(c => c.cid === r.cid) + 1;
+    rank = `<div class="f6 mt-2">OBS&rarr;C1 rank <strong>${i}</strong> of ${counted.length} in the division &middot;
+      faster than <strong>${Math.round((1 - i / counted.length) * 100)}%</strong></div>`;
+  } else if (row) {
+    rank = `<div class="f6 mt-2 color-fg-muted">Not ranked for OBS&rarr;C1: ${esc(row.omitReason)}.</div>`;
+  }
   $('cmpOut').innerHTML = `<div class="Box">
     <div class="Box-header">
       <div class="d-flex flex-items-baseline flex-wrap" style="gap:6px">
-        <strong class="f4">${esc(r.name)}</strong><span class="Label">${esc(r.facility)}</span>
+        <strong class="f4">${esc(r.name)}</strong><span class="Label" title="${esc(r.facName)}">${esc(r.facility)}</span>
         <span class="Label Label--accent">${esc(r.rating)}</span>
         <span class="f6 color-fg-muted text-mono">CID ${r.cid}</span></div>
-      <div class="f6 color-fg-muted text-mono mt-1">${chain || 'No promotions on record'}</div>
+      ${row && row.progression.length ? ladder(row)
+        : `<div class="f6 color-fg-muted text-mono mt-1">${chain || 'No promotions on record'}</div>`}
+      ${rank}
     </div>
     ${note ? `<div class="Box-row py-2 f6 color-bg-subtle">${note}</div>` : ''}
     ${rows.join('') || (noHistory ? '' : `<div class="Box-row color-fg-muted">${r.ratingId <= 1
@@ -480,8 +451,6 @@ $('dlBtn').addEventListener('click', () => {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 });
-let searchTimer;
-$('search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderSearch, 120); });
 
 const MODES = ['auto', 'light', 'dark'];
 const themeBtn = $('themeBtn');

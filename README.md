@@ -20,7 +20,7 @@ button switches it manually.
 - Compare: enter a CID or name to compare each stage with the facility and division. Stages still
   in progress show the time so far, and stages with no record are listed as such. Link straight to a
   comparison with `#cid=<CID>`.
-- Search covers every home controller, at any rating. A CID that isn't on any home roster is looked up
+- Compare covers every home controller, at any rating (C1+ also get their rating ladder and OBS→C1 rank). A CID that isn't on any home roster is looked up
   with `GET /v2/user/<cid>`. The public API returns no promotion history for those members, so the
   page shows what exists and says there's nothing to compare.
 - Members with name privacy enabled are shown by CID only.

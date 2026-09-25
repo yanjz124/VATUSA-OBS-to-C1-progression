@@ -76,15 +76,18 @@
     </div>
     <div class="tiles mb-6" id="tiles"></div>
 
-    <!-- Search -->
-    <div class="Subhead">
-      <h2 class="Subhead-heading">Find a controller</h2>
-      <div class="Subhead-description">Search by name or CID to see anyone's time to C1 and where it ranks.</div>
+    <!-- Compare -->
+    <div class="Subhead" id="compare">
+      <h2 class="Subhead-heading">Compare a controller</h2>
+      <div class="Subhead-description">Enter a CID or name to pull that controller's promotion history and compare each
+        stage with their facility and the whole division. Stages still in progress show the time so far, and missing
+        stages are noted. Any VATUSA CID works, even one that isn't on a home roster.</div>
     </div>
-    <div class="mb-6">
-      <input id="search" class="form-control input-block mb-3" type="search" placeholder="Name or CID" aria-label="Search by name or CID" autocomplete="off">
-      <div id="searchResults"></div>
-    </div>
+    <form id="cmpForm" class="d-flex mb-3" style="gap:8px">
+      <input id="cmpInput" class="form-control flex-auto" type="search" placeholder="CID, e.g. 1314720" aria-label="CID or name to compare" autocomplete="off">
+      <button class="btn" type="submit">Compare</button>
+    </form>
+    <div id="cmpOut" class="mb-6"></div>
 
     <!-- Leaders -->
     <div class="Subhead">
@@ -162,17 +165,6 @@
       <div class="overflow-x-auto"><table class="stage-matrix" id="stageMatrix"></table></div>
     </div>
 
-    <!-- Compare -->
-    <div class="Subhead" id="compare">
-      <h2 class="Subhead-heading">Compare a controller</h2>
-      <div class="Subhead-description">Enter a CID (or a name) to compare each stage against that controller's facility
-        and the whole division. Stages without a record are skipped, and a stage still in progress shows the time so far.</div>
-    </div>
-    <form id="cmpForm" class="d-flex mb-3" style="gap:8px">
-      <input id="cmpInput" class="form-control flex-auto" type="search" placeholder="CID, e.g. 1314720" aria-label="CID or name to compare" autocomplete="off">
-      <button class="btn" type="submit">Compare</button>
-    </form>
-    <div id="cmpOut" class="mb-6"></div>
   </div>
 
   <footer class="border-top pt-4 mt-6 f6 color-fg-muted">
