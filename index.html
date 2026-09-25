@@ -67,6 +67,16 @@
       </div>
     </div>
 
+    <!-- Caveat -->
+    <div class="flash mb-6">
+      <strong>Read this before comparing facilities.</strong> The numbers only cover controllers currently on a
+      VATUSA home roster. Anyone who left, transferred out or went inactive and was removed isn't counted. This is
+      also <strong>not</strong> a measure of any facility's current training wait time: controllers are listed under
+      the facility they're in <em>now</em>, and many earned some or all of their ratings elsewhere. Times also
+      include breaks, inactivity and personal pace, and many of the promotions happened years ago under different
+      training programs.
+    </div>
+
     <!-- Tiles -->
     <div class="Subhead">
       <h2 class="Subhead-heading">Division at a glance</h2>
@@ -114,8 +124,8 @@
     <div class="Subhead">
       <h2 class="Subhead-heading">By facility</h2>
       <div class="Subhead-description">Sorted by median time to C1. Expand an ARTCC to see its fastest and slowest
-        controllers. Small facilities have unstable medians, and facility is each controller's <em>current</em>
-        home, not necessarily where they trained.</div>
+        controllers. Small facilities have unstable medians. Facility is each controller's <em>current</em> home,
+        not necessarily where they trained, so this doesn't reflect how long training takes there today.</div>
     </div>
     <div class="Box p-3 mb-3">
       <div id="plot"></div>
@@ -160,7 +170,8 @@
     </div>
     <div class="Box mb-6">
       <div class="Box-header"><h3 class="Box-title">Median days per stage, by facility</h3>
-        <div class="f6 color-fg-muted mt-1">Green is faster than the division median for that stage, red is slower.
+        <div class="f6 color-fg-muted mt-1">Grouped by current home facility, not by the facility that granted each
+          rating. Green is faster than the division median for that stage, red is slower.
           Hover a cell for its sample size. Click a column heading to sort.</div></div>
       <div class="overflow-x-auto"><table class="stage-matrix" id="stageMatrix"></table></div>
     </div>

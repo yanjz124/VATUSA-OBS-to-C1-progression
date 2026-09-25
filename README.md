@@ -25,6 +25,16 @@ button switches it manually.
   page shows what exists and says there's nothing to compare.
 - Members with name privacy enabled are shown by CID only.
 
+### Limitations
+
+- Only controllers **currently on a VATUSA home roster** are included. Anyone who left, transferred out
+  or was removed for inactivity isn't counted.
+- Controllers are grouped by their **current** home facility, and many earned some or all of their
+  ratings elsewhere. The public API doesn't expose transfer history without a key, so the facility
+  that granted each rating can't be identified.
+- Times include breaks, inactivity and personal pace, and span many years of changing training
+  programs. **This is not a measure of any facility's current training wait time.**
+
 ## Files
 
 | Path | Purpose |
