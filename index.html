@@ -140,6 +140,39 @@
       </summary>
       <div id="omitList"></div>
     </details>
+
+    <!-- Stages -->
+    <div class="Subhead" id="stages">
+      <h2 class="Subhead-heading">Stage by stage</h2>
+      <div class="Subhead-description">Time between consecutive promotions, across <strong>every</strong> home
+        controller who has finished that stage, including current S2s, S3s and C1s. Older records that skipped a
+        rating (e.g. S1&rarr;S3) are left out of the stages they skipped.</div>
+    </div>
+    <div class="Box mb-3">
+      <div class="Box-header stage-grid f6 text-mono text-uppercase color-fg-muted">
+        <span>Stage</span><span class="text-right">N</span><span class="text-right">Median</span>
+        <span class="text-right">Mean</span><span class="hide-sm">Middle 50% &middot; median</span>
+      </div>
+      <div id="stageBody"></div>
+    </div>
+    <div class="Box mb-6">
+      <div class="Box-header"><h3 class="Box-title">Median days per stage, by facility</h3>
+        <div class="f6 color-fg-muted mt-1">Green is faster than the division median for that stage, red is slower.
+          Hover a cell for its sample size. Click a column heading to sort.</div></div>
+      <div class="overflow-x-auto"><table class="stage-matrix" id="stageMatrix"></table></div>
+    </div>
+
+    <!-- Compare -->
+    <div class="Subhead" id="compare">
+      <h2 class="Subhead-heading">Compare a controller</h2>
+      <div class="Subhead-description">Enter a CID (or a name) to compare each stage against that controller's facility
+        and the whole division. Stages without a record are skipped, and a stage still in progress shows the time so far.</div>
+    </div>
+    <form id="cmpForm" class="d-flex mb-3" style="gap:8px">
+      <input id="cmpInput" class="form-control flex-auto" type="search" placeholder="CID, e.g. 1314720" aria-label="CID or name to compare" autocomplete="off">
+      <button class="btn" type="submit">Compare</button>
+    </form>
+    <div id="cmpOut" class="mb-6"></div>
   </div>
 
   <footer class="border-top pt-4 mt-6 f6 color-fg-muted">

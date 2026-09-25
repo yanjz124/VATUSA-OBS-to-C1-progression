@@ -33,6 +33,19 @@ export async function fetchFacilities() {
     .map(f => ({ id: f.id, name: f.name }));
 }
 
+// Single member lookup for CIDs that aren't on a home roster. Resolves to null when no such CID exists.
+// Note: for non-roster members the public API usually returns `promotions: null`.
+export async function fetchUser(cid) {
+  try {
+    const j = await getJSON(`${API}/user/${encodeURIComponent(cid)}`, 15000);
+    const u = j && j.data !== undefined ? j.data : j;
+    return u && u.cid ? u : null;
+  } catch (e) {
+    if (/HTTP 404/.test(e.message)) return null;
+    throw e;
+  }
+}
+
 // Fetches every facility's home roster. onProgress(done, total, facId) fires as each completes.
 export async function fetchAll(onProgress = () => {}) {
   const facs = await fetchFacilities();
@@ -165,6 +178,85 @@ export function summarize(rows) {
     facilities,
     counted,
   };
+}
+
+/* ---------- stage-by-stage ---------- */
+
+// `rating` is the current rating of someone still sitting in that stage (null = any of `ratings`).
+export const STAGES = [
+  { key: 's1s2', label: 'S1 → S2', from: 's1', to: 's2', ratings: [2] },
+  { key: 's2s3', label: 'S2 → S3', from: 's2', to: 's3', ratings: [3] },
+  { key: 's3c1', label: 'S3 → C1', from: 's3', to: 'c1', ratings: [4] },
+  { key: 'total', label: 'OBS → C1', from: 's1', to: 'c1', ratings: [2, 3, 4] },
+];
+
+// Compact record for every home controller (any rating) with the first date of each step.
+export function toStageRecord(m) {
+  const promos = (m.promotions || [])
+    .filter(p => p.created_at)
+    .slice()
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const find = (from, to, after) => promos.find(p => p.from === from && p.to === to &&
+    (!after || new Date(p.created_at) >= new Date(after.created_at)));
+  const s1 = find(1, 2);
+  const s2 = find(2, 3, s1);
+  const s3 = find(3, 4, s2 || s1);
+  const c1 = find(4, 5, s1);
+  return {
+    cid: m.cid,
+    name: m.flag_nameprivacy ? `CID ${m.cid}` : `${m.fname || ''} ${m.lname || ''}`.trim(),
+    facility: m._fac ? m._fac.id : m.facility,
+    facName: m._fac ? m._fac.name : '',
+    rating: m.rating_short || RATINGS[m.rating] || String(m.rating),
+    ratingId: m.rating,
+    s1: s1 ? s1.created_at : '', s2: s2 ? s2.created_at : '',
+    s3: s3 ? s3.created_at : '', c1: c1 ? c1.created_at : '',
+  };
+}
+
+// Completed stage duration in days, or null.
+export function stageDays(rec, st) {
+  if (!rec[st.from] || !rec[st.to]) return null;
+  const d = (new Date(rec[st.to]) - new Date(rec[st.from])) / DAY_MS;
+  return d >= 0 ? Math.round(d * 10) / 10 : null;
+}
+
+// Days spent so far in a stage the controller hasn't finished yet, or null.
+export function stageElapsed(rec, st, now = Date.now()) {
+  if (rec[st.to] || !rec[st.from] || !st.ratings.includes(rec.ratingId)) return null;
+  return Math.max(0, Math.round((now - new Date(rec[st.from])) / DAY_MS));
+}
+
+const quantile = (sorted, q) => {
+  if (!sorted.length) return 0;
+  const i = (sorted.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+};
+const stats = values => {
+  const s = [...values].sort((a, b) => a - b);
+  return {
+    n: s.length, values: s, mean: mean(s), median: quantile(s, 0.5),
+    p25: quantile(s, 0.25), p75: quantile(s, 0.75), p90: quantile(s, 0.9),
+  };
+};
+
+// Share of a sorted sample that took strictly longer than v (i.e. "faster than X%").
+export const fasterThan = (sorted, v) => (sorted.length ? sorted.filter(x => x > v).length / sorted.length : 0);
+
+export function summarizeStages(recs) {
+  return STAGES.map(st => {
+    const all = [];
+    const byFac = new Map();
+    for (const r of recs) {
+      const d = stageDays(r, st);
+      if (d === null) continue;
+      all.push(d);
+      if (!byFac.has(r.facility)) byFac.set(r.facility, []);
+      byFac.get(r.facility).push(d);
+    }
+    const fac = new Map([...byFac].map(([k, v]) => [k, stats(v)]));
+    return { ...st, division: stats(all), fac };
+  });
 }
 
 export const CSV_COLUMNS = [

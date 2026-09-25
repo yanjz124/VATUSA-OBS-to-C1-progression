@@ -15,6 +15,14 @@ button switches it manually.
 - Kept: current rating ≥ C1 (C1, C3, I1, I3, SUP, ADM).
 - Duration: first `S3→C1` promotion date minus first `OBS→S1` promotion date.
 - Omitted: controllers missing either promotion (typically transfers or incomplete legacy records).
+- Stage by stage: S1→S2, S2→S3 and S3→C1 are measured between consecutive first promotions for
+  **every** home controller who completed that stage (any current rating), with a facility × stage median table.
+- Compare: enter a CID or name to compare each stage with the facility and division. Stages still
+  in progress show the time so far, and stages with no record are listed as such. Link straight to a
+  comparison with `#cid=<CID>`.
+- Search covers every home controller, at any rating. A CID that isn't on any home roster is looked up
+  with `GET /v2/user/<cid>`. The public API returns no promotion history for those members, so the
+  page shows what exists and says there's nothing to compare.
 - Members with name privacy enabled are shown by CID only.
 
 ## Files

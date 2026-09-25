@@ -53,7 +53,38 @@ details.fac[open] .caret { transform: rotate(90deg); }
 .mbar { height: 6px; border-radius: 3px; background: var(--bgColor-neutral-muted); overflow: hidden; min-width: 60px; }
 .mbar i { display: block; height: 100%; background: var(--med); }
 
+/* Stage summary */
+.stage-grid { display: grid; grid-template-columns: 110px 60px 80px 80px 1fr; gap: 10px; align-items: center; }
+.iqr { position: relative; height: 18px; }
+.iqr .axis { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--borderColor-muted); }
+.iqr .band { position: absolute; top: 50%; height: 8px; transform: translateY(-50%); border-radius: 4px;
+  background: color-mix(in srgb, var(--med) 30%, transparent); }
+.iqr .tick { position: absolute; top: 1px; bottom: 1px; width: 3px; border-radius: 2px; transform: translateX(-50%); }
+.iqr .tick.div { background: var(--med); }
+.iqr .tick.fac { background: var(--fgColor-attention, #9a6700); }
+.iqr .you { position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%; transform: translate(-50%, -50%);
+  border: 2px solid var(--bgColor-default); z-index: 1; }
+.iqr .you.done { background: var(--fgColor-default); }
+.iqr .you.wip { background: var(--bgColor-default); border-color: var(--fgColor-default); border-style: dashed; }
+.dot-fac { background: var(--fgColor-attention, #9a6700); }
+.dot-you { background: var(--fgColor-default); }
+
+/* Facility x stage matrix */
+.stage-matrix { width: 100%; border-collapse: collapse; font-family: var(--fontStack-monospace, monospace); font-size: 12px; }
+.stage-matrix th, .stage-matrix td { padding: 6px 12px; text-align: right; border-top: 1px solid var(--borderColor-muted); white-space: nowrap; }
+.stage-matrix th:first-child, .stage-matrix td:first-child { text-align: left; font-weight: 600; }
+.stage-matrix thead th { color: var(--fgColor-muted); font-weight: 600; border-top: 0; cursor: pointer; user-select: none; }
+.stage-matrix thead th[aria-sort] { color: var(--fgColor-default); }
+.stage-matrix tr.div-row td { font-weight: 600; background: var(--bgColor-muted); }
+.stage-matrix td.na { color: var(--fgColor-muted); }
+
+/* Compare */
+.cmp-grid { display: grid; grid-template-columns: 90px 110px 1fr 1fr 1.6fr; gap: 12px; align-items: center; }
+
 @media (max-width: 543px) {
+  .stage-grid { grid-template-columns: 1fr 44px 60px 60px; gap: 8px; }
+  .cmp-grid { grid-template-columns: 1fr 1fr; }
+  .cmp-grid .cmp-bar { grid-column: 1 / -1; }
   .fac-grid { grid-template-columns: 18px 48px 1fr 1fr 1fr; gap: 8px; }
   .plot-scale, .plot-legend { margin-left: 0; padding-left: 0; }
   .prow { grid-template-columns: 36px 1fr; }

@@ -1,6 +1,9 @@
-import { fetchAll, toRow, summarize, toCSV } from './vatusa.js';
+import {
+  fetchAll, fetchUser, toRow, summarize, toCSV,
+  STAGES, toStageRecord, stageDays, stageElapsed, summarizeStages, fasterThan,
+} from './vatusa.js';
 
-const CACHE_KEY = 'obs2c1:v1';
+const CACHE_KEY = 'obs2c1:v2';
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
 const $ = id => document.getElementById(id);
@@ -20,13 +23,13 @@ const fmtShort = s => {
   return `${MON[+m - 1]} '${y.slice(2)}`;
 };
 
-let state = null; // { rows, summary, fetchedAt, failed, homeTotal }
+let state = null; // { rows, recs, summary, stages, fetchedAt, failed, homeTotal }
 
 /* ---------- cache ---------- */
 function readCache() {
   try {
     const c = JSON.parse(localStorage.getItem(CACHE_KEY));
-    if (c && c.rows && Date.now() - c.fetchedAt < CACHE_TTL_MS) return c;
+    if (c && c.rows && c.recs && Date.now() - c.fetchedAt < CACHE_TTL_MS) return c;
   } catch (e) { /* storage unavailable */ }
   return null;
 }
@@ -72,7 +75,8 @@ async function load(force = false) {
     });
     const rows = res.members.map(toRow).filter(Boolean);
     if (!rows.length) throw new Error('The API returned no C1+ controllers.');
-    const data = { rows, fetchedAt: Date.now(), failed: res.failed, homeTotal: res.homeTotal, facCount: res.facilities.length };
+    const recs = res.members.map(toStageRecord);
+    const data = { rows, recs, fetchedAt: Date.now(), failed: res.failed, homeTotal: res.homeTotal, facCount: res.facilities.length };
     if (!res.failed.length) writeCache(data);
     setProgress(null);
     finish(data, false);
@@ -87,7 +91,7 @@ async function load(force = false) {
 }
 
 function finish(data, fromCache) {
-  state = { ...data, summary: summarize(data.rows) };
+  state = { ...data, summary: summarize(data.rows), stages: summarizeStages(data.recs) };
   const when = new Date(data.fetchedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
   setStatus(fromCache ? 'cached' : 'live',
     `${fromCache ? 'Cached from' : 'Fetched'} ${esc(when)} &middot; ${data.facCount} ARTCCs &middot; ` +
@@ -101,6 +105,7 @@ function finish(data, fromCache) {
   $('dlBtn').textContent = `Download CSV (${data.rows.length})`;
   render();
   $('app').hidden = false;
+  compareFromHash();
 }
 
 /* ---------- pieces ---------- */
@@ -217,6 +222,25 @@ function render() {
   $('omitList').innerHTML = omitted.map(p => card(p, 0)).join('');
 
   renderSearch();
+  renderStages();
+}
+
+function chainOf(r) {
+  return [['S1', r.s1], ['S2', r.s2], ['S3', r.s3], ['C1', r.c1]].filter(x => x[1])
+    .map(([k, d]) => `${k} ${esc(fmtDate(d.slice(0, 10)))}`).join(' &rarr; ');
+}
+
+// Row for a home controller who isn't C1+ (so isn't part of the OBS->C1 dataset).
+function recCard(r) {
+  const status = r.ratingId <= 1 ? 'Still OBS, no stages started yet'
+    : r.ratingId < 5 ? `Currently ${esc(r.rating)}, hasn't reached C1 yet`
+    : 'No promotion history on file';
+  return `<div class="Box-row">
+    <div><strong>${esc(r.name)}</strong> <span class="Label ml-1" title="${esc(r.facName)}">${esc(r.facility)}</span>
+      <span class="Label Label--accent ml-1">${esc(r.rating)}</span></div>
+    <div class="f6 color-fg-muted text-mono mt-1">CID ${r.cid} &middot; ${chainOf(r) || 'no promotions on record'}</div>
+    <div class="f6 color-fg-muted mt-1">${status}.</div>
+  </div>`;
 }
 
 function renderSearch() {
@@ -225,22 +249,225 @@ function renderSearch() {
   const out = $('searchResults');
   if (q.length < 2) { out.innerHTML = ''; return; }
   const counted = state.summary.counted;
-  const hits = state.rows.filter(r => String(r.cid).includes(q) || r.name.toLowerCase().includes(q)).slice(0, 10);
+  const rowByCid = new Map(state.rows.map(r => [r.cid, r]));
+  const all = state.recs.filter(r => String(r.cid).includes(q) || r.name.toLowerCase().includes(q));
+  all.sort((a, b) => (rowByCid.has(b.cid) - rowByCid.has(a.cid)) || (b.ratingId - a.ratingId));
+  const hits = all.slice(0, 10);
   if (!hits.length) {
-    out.innerHTML = `<div class="blankslate blankslate-narrow Box"><p class="mb-0">No C1+ home controller matches “${esc(q)}”.</p></div>`;
+    const isCid = /^[0-9]+$/.test(q);
+    out.innerHTML = `<div class="blankslate blankslate-narrow Box"><p class="mb-0">No controller on any VATUSA home roster matches “${esc(q)}”.
+      ${isCid ? 'Enter the full CID under <a href="#compare">Compare a controller</a>, which also checks VATUSA for members who aren\'t on a home roster.' : ''}</p></div>`;
     return;
   }
-  out.innerHTML = `<div class="Box">${hits.map(p => {
-    let note = '';
-    if (p.counted) {
+  out.innerHTML = `<div class="Box">${hits.map(r => {
+    const p = rowByCid.get(r.cid);
+    let html = p ? card(p, 0) : recCard(r);
+    if (p && p.counted) {
       const rank = counted.findIndex(c => c.cid === p.cid) + 1;
       const pct = Math.round((1 - rank / counted.length) * 100);
-      note = `<div class="Box-row py-2 color-bg-subtle f6">Rank <strong>${rank}</strong> of ${counted.length} &middot;
+      html += `<div class="Box-row py-2 color-bg-subtle f6">Rank <strong>${rank}</strong> of ${counted.length} &middot;
         faster than <strong>${pct}%</strong> of the division</div>`;
     }
-    return card(p, 0) + note;
-  }).join('')}</div>`;
+    return html + `<div class="Box-row py-2 f6"><button type="button" class="btn-link" data-compare="${r.cid}">Compare stage by stage &darr;</button></div>`;
+  }).join('')}${all.length > hits.length ? `<div class="Box-footer f6 color-fg-muted">Showing 10 of ${all.length} matches. Refine the search to narrow it down.</div>` : ''}</div>`;
 }
+
+/* ---------- stages ---------- */
+let matrixSort = { key: 'total', dir: 1 };
+
+function renderStages() {
+  const stages = state.stages;
+  const maxV = Math.max(1, ...stages.map(s => s.division.p75)) * 1.15;
+  const sq = v => Math.min(100, Math.sqrt(Math.max(0, v)) / Math.sqrt(maxV) * 100);
+  $('stageBody').innerHTML = stages.map(s => {
+    const d = s.division;
+    return `<div class="Box-row stage-grid py-2">
+      <span class="text-mono text-bold">${esc(s.label)}</span>
+      <span class="text-mono text-right">${d.n.toLocaleString()}</span>
+      <span class="text-mono text-right text-bold color-fg-accent">${fmtDays(d.median)}d</span>
+      <span class="text-mono text-right">${fmtDays(d.mean)}d</span>
+      <span class="hide-sm"><span class="iqr d-block tooltipped tooltipped-n" aria-label="Middle 50%: ${fmtDays(d.p25)}–${fmtDays(d.p75)} days">
+        <span class="axis"></span>
+        <span class="band" style="left:${sq(d.p25)}%;width:${sq(d.p75) - sq(d.p25)}%"></span>
+        <span class="tick div" style="left:${sq(d.median)}%"></span></span>
+        <span class="text-mono f6 color-fg-muted">${fmtDays(d.p25)} – ${fmtDays(d.p75)} d</span></span>
+    </div>`;
+  }).join('');
+  renderMatrix();
+}
+
+function renderMatrix() {
+  const stages = state.stages;
+  const facs = [...new Map(state.recs.map(r => [r.facility, r.facName])).entries()];
+  const med = (fac, s) => (s.fac.get(fac) ? s.fac.get(fac).median : null);
+  const { key, dir } = matrixSort;
+  facs.sort((a, b) => {
+    if (key === 'fac') return dir * a[0].localeCompare(b[0]);
+    const s = stages.find(x => x.key === key);
+    const va = med(a[0], s), vb = med(b[0], s);
+    if (va === null) return 1;
+    if (vb === null) return -1;
+    return dir * (va - vb);
+  });
+  const cell = (fac, s) => {
+    const st = s.fac.get(fac);
+    if (!st) return '<td class="na">–</td>';
+    const ratio = Math.log2(st.median / Math.max(1, s.division.median));
+    const pct = Math.round(Math.min(1, Math.abs(ratio)) * 35);
+    const color = ratio < 0 ? 'var(--fast)' : 'var(--slow)';
+    const bg = pct ? `background:color-mix(in srgb, ${color} ${pct}%, transparent)` : '';
+    return `<td style="${bg}${st.n < 3 ? ';opacity:.6' : ''}" title="n = ${st.n}${st.n < 3 ? ' (small sample)' : ''}">${fmtDays(st.median)}</td>`;
+  };
+  const th = (k, label) => `<th data-sort="${k}"${key === k ? ` aria-sort="${dir > 0 ? 'ascending' : 'descending'}"` : ''}>` +
+    `${esc(label)}${key === k ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+  $('stageMatrix').innerHTML =
+    `<thead><tr>${th('fac', 'ARTCC')}${stages.map(s => th(s.key, s.label)).join('')}</tr></thead><tbody>` +
+    `<tr class="div-row"><td>Division</td>${stages.map(s => `<td title="n = ${s.division.n}">${fmtDays(s.division.median)}</td>`).join('')}</tr>` +
+    facs.map(([fac, name]) => `<tr><td title="${esc(name)}">${esc(fac)}</td>${stages.map(s => cell(fac, s)).join('')}</tr>`).join('') +
+    '</tbody>';
+}
+
+$('stageMatrix').addEventListener('click', e => {
+  const k = e.target.closest('th')?.dataset.sort;
+  if (!k) return;
+  matrixSort = { key: k, dir: matrixSort.key === k ? -matrixSort.dir : 1 };
+  renderMatrix();
+});
+
+/* ---------- compare ---------- */
+let cmpSeq = 0;
+function runCompare(q) {
+  const seq = ++cmpSeq;
+  q = String(q || '').trim();
+  const out = $('cmpOut');
+  if (!state || !q) { out.innerHTML = ''; return; }
+  const lq = q.toLowerCase();
+  const hits = /^\d+$/.test(q)
+    ? state.recs.filter(r => String(r.cid) === q)
+    : lq.length >= 2 ? state.recs.filter(r => r.name.toLowerCase().includes(lq)) : [];
+  if (!hits.length && /^[0-9]+$/.test(q)) { lookupOffRoster(q, seq); return; }
+  if (!hits.length) {
+    out.innerHTML = `<div class="blankslate blankslate-narrow Box"><p class="mb-0">No controller on any VATUSA home roster matches “${esc(q)}”.
+      Controllers who aren't on a home roster can only be looked up by CID.</p></div>`;
+    return;
+  }
+  if (hits.length > 1) {
+    out.innerHTML = `<div class="Box"><div class="Box-header f6">${hits.length} matches, pick one</div>${hits.slice(0, 15).map(r =>
+      `<div class="Box-row py-2"><button type="button" class="btn-link" data-compare="${r.cid}">${esc(r.name)}</button>
+       <span class="Label ml-1">${esc(r.facility)}</span> <span class="f6 color-fg-muted text-mono">CID ${r.cid} &middot; ${esc(r.rating)}</span></div>`).join('')}</div>`;
+    return;
+  }
+  renderCompare(hits[0]);
+  try { history.replaceState(null, '', `#cid=${hits[0].cid}`); } catch (e) { /* ignore */ }
+}
+
+// CID isn't on any home roster: ask the API about it directly and use whatever it returns.
+async function lookupOffRoster(cid, seq) {
+  const out = $('cmpOut');
+  out.innerHTML = `<div class="Box p-3 f6 color-fg-muted">CID ${esc(cid)} isn't on a VATUSA home roster. Checking VATUSA…</div>`;
+  let u;
+  try {
+    u = await fetchUser(cid);
+  } catch (e) {
+    if (seq !== cmpSeq) return;
+    out.innerHTML = `<div class="flash flash-error">Couldn't look up CID ${esc(cid)} (${esc(e.message)}). Try again in a minute.</div>`;
+    return;
+  }
+  if (seq !== cmpSeq) return;
+  if (!u) {
+    out.innerHTML = `<div class="blankslate blankslate-narrow Box"><p class="mb-0">VATUSA has no record of CID ${esc(cid)}, so there's no data to show.</p></div>`;
+    return;
+  }
+  const rec = toStageRecord({ ...u, _fac: { id: u.facility || '—', name: '' } });
+  const note = `Not on a VATUSA home roster (facility on file: <strong>${esc(u.facility || 'none')}</strong>), e.g. a visitor, a transfer or an inactive member.`;
+  if (Array.isArray(u.promotions) && u.promotions.length) {
+    renderCompare(rec, note);
+  } else {
+    renderCompare(rec, `${note} VATUSA doesn't publish promotion history for controllers outside the home rosters, so there's no stage data to compare.`, true);
+  }
+  try { history.replaceState(null, '', `#cid=${rec.cid}`); } catch (e) { /* ignore */ }
+}
+
+function renderCompare(r, note = '', noHistory = false) {
+  const chain = chainOf(r);
+  const rows = [];
+  const skipped = [], notYet = [];
+  const START_RATING = { s1: 2, s2: 3, s3: 4 };
+  for (const s of state.stages) {
+    const done = stageDays(r, s);
+    const wip = done === null ? stageElapsed(r, s) : null;
+    if (done === null && wip === null) {
+      (!r[s.from] && r.ratingId < START_RATING[s.from] ? notYet : skipped).push(s.label);
+      continue;
+    }
+    const v = done ?? wip;
+    const div = s.division;
+    const fac = s.fac.get(r.facility);
+    let divNote, facNote = '';
+    if (done !== null) {
+      divNote = `faster than <strong>${Math.round(fasterThan(div.values, v) * 100)}%</strong>`;
+      if (fac) facNote = `faster than <strong>${Math.round(fasterThan(fac.values, v) * 100)}%</strong>`;
+    } else {
+      const shorter = vals => Math.round(vals.filter(x => x < v).length / Math.max(1, vals.length) * 100);
+      divNote = `${shorter(div.values)}% finished sooner`;
+      if (fac) facNote = `${shorter(fac.values)}% finished sooner`;
+    }
+    const maxV = Math.max(div.p90, v, fac ? fac.median : 0) * 1.1 || 1;
+    const sq = x => Math.min(100, Math.sqrt(Math.max(0, x)) / Math.sqrt(maxV) * 100);
+    rows.push(`<div class="Box-row cmp-grid">
+      <span class="text-mono text-bold">${esc(s.label)}</span>
+      <span class="text-mono"><strong class="f4">${fmtDays(v)}d</strong>
+        ${wip !== null ? '<span class="Label Label--attention ml-1">so far</span>' : ''}</span>
+      <span class="f6"><span class="color-fg-muted">${esc(r.facility)} median</span><br>
+        <span class="text-mono">${fac ? `${fmtDays(fac.median)}d <span class="color-fg-muted">(n ${fac.n})</span>` : '–'}</span>
+        ${facNote ? `<br><span class="color-fg-muted">${facNote}</span>` : ''}</span>
+      <span class="f6"><span class="color-fg-muted">Division median</span><br>
+        <span class="text-mono">${fmtDays(div.median)}d <span class="color-fg-muted">(n ${div.n})</span></span>
+        <br><span class="color-fg-muted">${divNote}</span></span>
+      <span class="cmp-bar"><span class="iqr d-block">
+        <span class="axis"></span>
+        <span class="band" style="left:${sq(div.p25)}%;width:${sq(div.p75) - sq(div.p25)}%"></span>
+        <span class="tick div" style="left:${sq(div.median)}%" title="Division median ${fmtDays(div.median)}d"></span>
+        ${fac ? `<span class="tick fac" style="left:${sq(fac.median)}%" title="${esc(r.facility)} median ${fmtDays(fac.median)}d"></span>` : ''}
+        <span class="you ${wip !== null ? 'wip' : 'done'}" style="left:${sq(v)}%" title="${fmtDays(v)}d"></span>
+      </span></span>
+    </div>`);
+  }
+  $('cmpOut').innerHTML = `<div class="Box">
+    <div class="Box-header">
+      <div class="d-flex flex-items-baseline flex-wrap" style="gap:6px">
+        <strong class="f4">${esc(r.name)}</strong><span class="Label">${esc(r.facility)}</span>
+        <span class="Label Label--accent">${esc(r.rating)}</span>
+        <span class="f6 color-fg-muted text-mono">CID ${r.cid}</span></div>
+      <div class="f6 color-fg-muted text-mono mt-1">${chain || 'No promotions on record'}</div>
+    </div>
+    ${note ? `<div class="Box-row py-2 f6 color-bg-subtle">${note}</div>` : ''}
+    ${rows.join('') || (noHistory ? '' : `<div class="Box-row color-fg-muted">${r.ratingId <= 1
+      ? 'Still OBS: no stages started yet, so there\'s nothing to compare.'
+      : 'No usable promotion dates on record (often a transfer from another division or an incomplete legacy log), so there\'s nothing to compare.'}</div>`)}
+    ${notYet.length && rows.length ? `<div class="Box-row py-2 f6 color-fg-muted">Not reached yet: ${notYet.map(esc).join(', ')}</div>` : ''}
+    ${skipped.length && rows.length ? `<div class="Box-row py-2 f6 color-fg-muted">No record for: ${skipped.map(esc).join(', ')} (skipped rating or incomplete legacy log)</div>` : ''}
+    <div class="Box-footer f6 color-fg-muted text-mono flex-wrap ${rows.length ? 'd-flex' : 'd-none'}" style="gap:14px">
+      <span><i class="dot dot-you"></i>this controller</span><span><i class="dot dot-med"></i>division median</span>
+      <span><i class="dot dot-fac"></i>facility median</span><span>band = division middle 50% &middot; &radic;-scaled</span>
+    </div>
+  </div>`;
+}
+
+function compareFromHash() {
+  const m = location.hash.match(/cid=(\d+)/);
+  if (m && state) { $('cmpInput').value = m[1]; runCompare(m[1]); }
+}
+
+$('cmpForm').addEventListener('submit', e => { e.preventDefault(); runCompare($('cmpInput').value); });
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-compare]');
+  if (!b) return;
+  $('cmpInput').value = b.dataset.compare;
+  runCompare(b.dataset.compare);
+  $('compare').scrollIntoView({ behavior: 'smooth' });
+});
+window.addEventListener('hashchange', compareFromHash);
 
 /* ---------- controls ---------- */
 $('refreshBtn').addEventListener('click', () => load(true));
