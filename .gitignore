@@ -1,0 +1,3 @@
+# Old one-off snapshots; the site pulls live data
+*.csv
+*.xlsx

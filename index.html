@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OBS to C1 Tracker</title>
+  <meta name="description" content="How long VATUSA controllers take to go from OBS to C1, computed live from the public VATUSA API.">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@primer/css@21.5.1/dist/primer.css">
+  <link rel="stylesheet" href="assets/app.css">
+  <script>
+    try { var m = localStorage.getItem('obs2c1:theme'); if (m) document.documentElement.setAttribute('data-color-mode', m); } catch (e) {}
+  </script>
+</head>
+<body class="color-bg-default color-fg-default">
+
+<div class="Header px-3 px-md-4">
+  <div class="Header-item Header-item--full">
+    <span class="Header-link f4 d-flex flex-items-center">
+      <span class="text-mono">OBS</span><span class="mx-1 color-fg-muted">&rarr;</span><span class="text-mono">C1</span>
+      <span class="ml-2 text-normal hide-sm">VATUSA progression</span>
+    </span>
+  </div>
+  <div class="Header-item mr-2">
+    <button id="themeBtn" class="btn btn-sm btn-invisible color-fg-on-emphasis" type="button" aria-label="Change color theme">Theme: auto</button>
+  </div>
+  <div class="Header-item mr-0">
+    <a id="repoLink" class="Header-link" href="#" hidden>GitHub</a>
+  </div>
+</div>
+
+<main class="container-lg px-3 px-md-4 py-4 py-md-6">
+
+  <div class="d-flex flex-wrap flex-items-center flex-justify-between mb-4" style="gap:8px">
+    <div id="status" class="f6 color-fg-muted d-flex flex-items-center flex-wrap" style="gap:8px" aria-live="polite">
+      <span class="Label Label--attention">Loading</span><span>Contacting VATUSA API…</span>
+    </div>
+    <div class="d-flex" style="gap:8px">
+      <button id="refreshBtn" class="btn btn-sm" type="button" disabled>Refresh data</button>
+      <button id="dlBtn" class="btn btn-sm btn-primary" type="button" disabled>Download CSV</button>
+    </div>
+  </div>
+
+  <div id="progressWrap" class="mb-4">
+    <span class="Progress Progress--large"><span id="progressBar" class="Progress-item color-bg-accent-emphasis" style="width:0%"></span></span>
+  </div>
+  <div id="errors"></div>
+
+  <div id="app" hidden>
+    <!-- Hero -->
+    <div class="d-md-flex flex-items-stretch mb-6" style="gap:16px">
+      <div class="col-md-5 mb-3 mb-md-0">
+        <h1 class="h1 lh-condensed mb-2">How long from <span class="color-fg-accent">OBS</span> to <span class="color-fg-accent">C1</span>?</h1>
+        <p class="f4 color-fg-muted mb-3">Every current C1-and-above controller on a VATUSA home roster, measured from
+          their <strong>OBS&rarr;S1</strong> promotion to their <strong>S3&rarr;C1</strong> promotion.</p>
+        <div class="Box p-3">
+          <div class="f6 text-uppercase color-fg-muted text-mono">Typical controller &middot; median</div>
+          <div class="text-mono text-bold lh-condensed" style="font-size:56px" id="medBig"></div>
+          <div class="text-mono f5 color-fg-accent" id="meanSub"></div>
+        </div>
+      </div>
+      <div class="Box col-md-7 p-3 d-flex flex-column">
+        <div class="d-flex flex-justify-between f6 color-fg-muted text-mono mb-2">
+          <span class="text-uppercase">Distribution &middot; time to C1</span><span id="distTot"></span>
+        </div>
+        <div class="hist flex-auto" id="bars" role="img" aria-label="Histogram of time from OBS to C1"></div>
+        <div class="hist-x" id="barsX"></div>
+      </div>
+    </div>
+
+    <!-- Tiles -->
+    <div class="Subhead">
+      <h2 class="Subhead-heading">Division at a glance</h2>
+      <div class="Subhead-description">Based on <span id="nCounted" class="text-mono"></span> controllers with a complete
+        OBS&rarr;S1 and S3&rarr;C1 record. The mean sits well above the median: a long tail of controllers
+        who parked at S3 for years pulls the average up.</div>
+    </div>
+    <div class="tiles mb-6" id="tiles"></div>
+
+    <!-- Search -->
+    <div class="Subhead">
+      <h2 class="Subhead-heading">Find a controller</h2>
+      <div class="Subhead-description">Search by name or CID to see anyone's time to C1 and where it ranks.</div>
+    </div>
+    <div class="mb-6">
+      <input id="search" class="form-control input-block mb-3" type="search" placeholder="Name or CID" aria-label="Search by name or CID" autocomplete="off">
+      <div id="searchResults"></div>
+    </div>
+
+    <!-- Leaders -->
+    <div class="Subhead">
+      <h2 class="Subhead-heading">Fastest &amp; slowest in the division</h2>
+      <div class="Subhead-description">Rating ladders show the full promotion history on file. Highlighted labels mark the
+        measured OBS&rarr;C1 window; the rest are ratings earned afterward.</div>
+    </div>
+    <div class="d-md-flex mb-6" style="gap:16px">
+      <div class="col-md-6 mb-3 mb-md-0">
+        <div class="Box">
+          <div class="Box-header"><h3 class="Box-title"><span class="dot dot-fast"></span>Fastest 10</h3></div>
+          <div id="fastList"></div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="Box">
+          <div class="Box-header"><h3 class="Box-title"><span class="dot dot-slow"></span>Slowest 10</h3></div>
+          <div id="slowList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Facilities -->
+    <div class="Subhead">
+      <h2 class="Subhead-heading">By facility</h2>
+      <div class="Subhead-description">Sorted by median time to C1. Expand an ARTCC to see its fastest and slowest
+        controllers. Small facilities have unstable medians, and facility is each controller's <em>current</em>
+        home, not necessarily where they trained.</div>
+    </div>
+    <div class="Box p-3 mb-3">
+      <div id="plot"></div>
+      <div class="plot-scale" id="plotScale"></div>
+      <div class="d-flex flex-wrap f6 color-fg-muted text-mono mt-3 plot-legend" style="gap:16px">
+        <span><i class="dot dot-fast"></i>fastest</span>
+        <span><i class="dot dot-med"></i>median</span>
+        <span><i class="dot dot-slow"></i>slowest</span>
+        <span>&radic;-scaled days</span>
+      </div>
+    </div>
+    <div class="Box mb-6">
+      <div class="Box-header fac-grid f6 text-mono text-uppercase color-fg-muted">
+        <span></span><span>ARTCC</span><span class="text-right">N</span><span class="text-right">Mean</span>
+        <span class="text-right">Median</span><span class="hide-sm">Spread (fast &rarr; slow)</span>
+      </div>
+      <div id="facBody"></div>
+    </div>
+
+    <!-- Omitted -->
+    <details class="Box mb-6 details-reset">
+      <summary class="Box-header d-flex flex-items-center">
+        <h3 class="Box-title flex-auto">Omitted controllers <span class="Counter" id="omitCount"></span></h3>
+        <span class="f6 color-fg-muted">show</span>
+      </summary>
+      <div id="omitList"></div>
+    </details>
+  </div>
+
+  <footer class="border-top pt-4 mt-6 f6 color-fg-muted">
+    <p><strong>Method.</strong> Home rosters are fetched live in your browser from
+      <code>api.vatusa.net/v2/facility/&lt;id&gt;/roster/home</code> for every active ARTCC. Controllers rated C1 or
+      higher (C1, C3, I1, I3, SUP, ADM) are kept. Duration = date(S3&rarr;C1) &minus; date(OBS&rarr;S1), taken from
+      each member's promotion log. Controllers missing either promotion (usually transfers from outside VATUSA or
+      incomplete legacy records) are omitted.</p>
+    <p class="mb-0">Results are cached in your browser for one hour. Not affiliated with VATSIM or VATUSA.</p>
+  </footer>
+</main>
+
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>

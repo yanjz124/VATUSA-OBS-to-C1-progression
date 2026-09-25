@@ -1,0 +1,61 @@
+/* Only what Primer doesn't cover: the charts and a few grids. Colors come from Primer's theme variables. */
+:root {
+  --fast: var(--fgColor-success, #1a7f37);
+  --slow: var(--fgColor-danger, #d1242f);
+  --med: var(--fgColor-accent, #0969da);
+}
+
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.dot-fast { background: var(--fast); }
+.dot-slow { background: var(--slow); }
+.dot-med { background: var(--med); }
+
+/* Histogram */
+.hist { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; align-items: end; min-height: 160px; padding-top: 18px; }
+.hist .bar { position: relative; background: var(--med); border-radius: 4px 4px 0 0; min-height: 2px; opacity: .85; }
+.hist .bar:hover { opacity: 1; }
+.hist .bar span { position: absolute; top: -18px; left: 0; right: 0; text-align: center; font-size: 11px; color: var(--fgColor-muted); font-family: var(--fontStack-monospace, monospace); }
+.hist-x { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; margin-top: 6px; }
+.hist-x div { text-align: center; font-size: 11px; color: var(--fgColor-muted); font-family: var(--fontStack-monospace, monospace); white-space: nowrap; }
+
+/* Stat tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+
+/* Rating ladder */
+.ladder { display: flex; flex-wrap: wrap; align-items: flex-start; row-gap: 6px; margin-top: 8px; }
+.ladder .node { display: flex; flex-direction: column; align-items: center; min-width: 34px; }
+.ladder .node .Label { font-family: var(--fontStack-monospace, monospace); }
+.ladder .dt { font-size: 10px; color: var(--fgColor-muted); font-family: var(--fontStack-monospace, monospace); white-space: nowrap; margin-top: 2px; }
+.ladder .conn { width: 12px; height: 2px; margin: 10px 1px 0; background: var(--borderColor-default); border-radius: 1px; }
+.ladder .conn.win { background: var(--med); }
+
+/* Facility range plot */
+.prow { display: grid; grid-template-columns: 44px 1fr; gap: 12px; align-items: center; height: 24px; }
+.prow .pfac { font-family: var(--fontStack-monospace, monospace); font-size: 12px; font-weight: 600; text-align: right; color: var(--fgColor-muted); }
+.track { position: relative; height: 100%; }
+.track .axis { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--borderColor-muted); }
+.track .rng { position: absolute; top: 50%; height: 3px; transform: translateY(-50%); border-radius: 2px; background: var(--borderColor-default); }
+.track .pt { position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%); border: 1.5px solid var(--bgColor-default); }
+.track .pt.f { background: var(--fast); }
+.track .pt.s { background: var(--slow); }
+.track .pt.m { background: var(--med); width: 11px; height: 11px; z-index: 1; }
+.plot-scale { position: relative; height: 14px; margin: 6px 0 0 56px; font-size: 11px; color: var(--fgColor-muted); font-family: var(--fontStack-monospace, monospace); }
+.plot-scale span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.plot-legend { padding-left: 56px; }
+
+/* Facility table */
+.fac-grid { display: grid; grid-template-columns: 20px 60px 1fr 1fr 1fr 1.6fr; gap: 10px; align-items: center; }
+details.fac > summary { cursor: pointer; list-style: none; }
+details.fac > summary::-webkit-details-marker { display: none; }
+details.fac > summary:hover { background: var(--bgColor-muted); }
+details.fac .caret { display: inline-block; transition: transform .15s; color: var(--fgColor-muted); }
+details.fac[open] .caret { transform: rotate(90deg); }
+.mbar { height: 6px; border-radius: 3px; background: var(--bgColor-neutral-muted); overflow: hidden; min-width: 60px; }
+.mbar i { display: block; height: 100%; background: var(--med); }
+
+@media (max-width: 543px) {
+  .fac-grid { grid-template-columns: 18px 48px 1fr 1fr 1fr; gap: 8px; }
+  .plot-scale, .plot-legend { margin-left: 0; padding-left: 0; }
+  .prow { grid-template-columns: 36px 1fr; }
+  .plot-scale { margin-left: 48px; }
+}
